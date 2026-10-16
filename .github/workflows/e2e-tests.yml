@@ -1,0 +1,91 @@
+name: twitch-wap-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 1 * * *"   # nightly, 01:00 UTC
+  workflow_dispatch:
+    inputs:
+      search_term:
+        description: Search term
+        default: StarCraft II
+      device:
+        description: Chrome emulated device
+        default: Pixel 7
+      tags:
+        description: "pytest -m expression (e.g. smoke, regression and not smoke); empty = everything"
+        default: ""
+      video:
+        description: Video recording policy
+        type: choice
+        options: [on-failure, always, off]
+        default: on-failure
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests (web object / page objects)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # Coverage gate (fail_under in .coveragerc) + JUnit report for the CI summary
+      - run: pytest tests/unit --cov --cov-report=term-missing --cov-report=xml --junitxml=reports/unit-junit.xml
+      - name: Unit summary
+        if: always()
+        run: python3 -m src.utils.junit_summary reports/unit-junit.xml "Unit tests" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-results-${{ github.run_id }}
+          path: |
+            reports/unit-junit.xml
+            reports/report-unit.html
+            coverage.xml
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E scenarios (Chrome mobile emulator in Docker)
+    needs: unit            # scenarios only run when every unit test passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t twitch-wap-tests .
+      - name: Run scenarios
+        # Every setting is an env var (see .env.example); TWITCH_HEADLESS / NO_SANDBOX are fixed by the image.
+        run: |
+          mkdir -p reports
+          docker run --rm --shm-size=1g \
+            -e TWITCH_SEARCH_TERM="${{ inputs.search_term || 'StarCraft II' }}" \
+            -e TWITCH_DEVICE="${{ inputs.device || 'Pixel 7' }}" \
+            -e TWITCH_TAGS="${{ inputs.tags || '' }}" \
+            -e TWITCH_SCREENSHOT_POLICY=always \
+            -e TWITCH_VIDEO_POLICY="${{ inputs.video || 'on-failure' }}" \
+            -e TWITCH_SKIP_UNIT_GATE=true \
+            -e TWITCH_JUNIT_XML=reports/e2e-junit.xml \
+            -v "$PWD/reports:/app/reports" \
+            twitch-wap-tests src/specs -o log_cli=true
+      - name: E2E summary
+        if: always()
+        run: python3 -m src.utils.junit_summary reports/e2e-junit.xml "E2E scenarios" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report, screenshots and recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14

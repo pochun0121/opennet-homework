@@ -1,0 +1,6 @@
+selenium>=4.20,<5
+pytest>=8.0
+pytest-timeout>=2.3
+pytest-html>=4.1
+pytest-cov>=5.0
+pillow>=10

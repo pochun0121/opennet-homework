@@ -1,0 +1,20 @@
+# All variables are documented in .env.example. Values exported in your shell (or a .env next to this file,
+# which compose reads for ${VAR} substitution) are forwarded into the container.
+services:
+  tests:
+    build: .
+    environment:
+      TWITCH_BASE_URL: ${TWITCH_BASE_URL:-https://www.twitch.tv}
+      TWITCH_SEARCH_TERM: ${TWITCH_SEARCH_TERM:-StarCraft II}
+      TWITCH_DEVICE: ${TWITCH_DEVICE:-Pixel 7}
+      TWITCH_TIMEOUT: ${TWITCH_TIMEOUT:-15}
+      TWITCH_LIGHT_MODE: ${TWITCH_LIGHT_MODE:-true}
+      TWITCH_BLOCK_IMAGES: ${TWITCH_BLOCK_IMAGES:-false}
+      TWITCH_TAGS: ${TWITCH_TAGS:-}
+      TWITCH_SCREENSHOT_POLICY: ${TWITCH_SCREENSHOT_POLICY:-on-failure}
+      TWITCH_VIDEO_POLICY: ${TWITCH_VIDEO_POLICY:-on-failure}
+      TWITCH_SKIP_UNIT_GATE: ${TWITCH_SKIP_UNIT_GATE:-false}
+    volumes:
+      - ./reports:/app/reports
+    shm_size: "1gb"
+    # TWITCH_HEADLESS / TWITCH_NO_SANDBOX / CHROME_BIN / CHROMEDRIVER_PATH are fixed by the Dockerfile.
